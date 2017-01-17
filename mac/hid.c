@@ -179,6 +179,9 @@ static void free_hid_device(hid_device *dev)
 }
 
 static	IOHIDManagerRef hid_mgr = 0x0;
+static	pthread_t hid_mgr_thread;
+static	pthread_barrier_t hid_mgr_barrier;
+static	CFRunLoopRef hid_mgr_run_loop;
 
 
 #if 0
@@ -344,14 +347,56 @@ static io_service_t hidapi_IOHIDDeviceGetService(IOHIDDeviceRef device)
 	}
 }
 
+static void *manager_thread(void *param)
+{
+	SInt32 code;
+
+	/* Move the manager's run loop to this thread. */
+	IOHIDManagerSetDeviceMatching(hid_mgr, NULL);
+	IOHIDManagerScheduleWithRunLoop(hid_mgr, CFRunLoopGetCurrent(), CFSTR("hidapi"));
+
+	/* Store off the Run Loop so it can be stopped from hid_exit() */
+	hid_mgr_run_loop = CFRunLoopGetCurrent();
+
+	/* Notify init_hid_manager() that the manager thread is up and running. */
+	pthread_barrier_wait(&hid_mgr_barrier);
+
+	/* Run the Event Loop */
+	while (1) {
+		code = CFRunLoopRunInMode(CFSTR("hidapi"), 1000/*sec*/, FALSE);
+		if (code == kCFRunLoopRunTimedOut) {
+			/* If the run loop timed out, run it again */
+			continue;
+		}
+		else if (code == kCFRunLoopRunStopped) {
+			/* Run loop was stopped, must have been from hid_exit() */
+			break;
+		}
+		else if (code == kCFRunLoopRunFinished ||
+		         code == kCFRunLoopRunTimedOut) {
+			/* Neither of these should ever be returned */
+			break;
+		}
+	}
+
+	/* Unschedule the manager from this thread's run loop (must be done before thread exits!) */
+	IOHIDManagerUnscheduleFromRunLoop(hid_mgr, CFRunLoopGetCurrent(), CFSTR("hidapi"));
+
+	return NULL;
+}
+
 /* Initialize the IOHIDManager. Return 0 for success and -1 for failure. */
 static int init_hid_manager(void)
 {
 	/* Initialize all the HID Manager Objects */
 	hid_mgr = IOHIDManagerCreate(kCFAllocatorDefault, kIOHIDOptionsTypeNone);
 	if (hid_mgr) {
-		IOHIDManagerSetDeviceMatching(hid_mgr, NULL);
-		IOHIDManagerScheduleWithRunLoop(hid_mgr, CFRunLoopGetCurrent(), kCFRunLoopDefaultMode);
+		/* Start the HID Manager thread */
+		pthread_barrier_init(&hid_mgr_barrier, NULL, 2);
+		pthread_create(&hid_mgr_thread, NULL, manager_thread, NULL);
+
+		/* Wait here for the HID Manager thread to be initialized. */
+		pthread_barrier_wait(&hid_mgr_barrier);
 		return 0;
 	}
 
@@ -375,6 +420,12 @@ int HID_API_EXPORT hid_exit(void)
 {
 	if (hid_mgr) {
 		/* Close the HID manager. */
+		CFRunLoopStop(hid_mgr_run_loop);
+
+		/* Wait for the manager thread to exit */
+		pthread_join(hid_mgr_thread, NULL);
+		pthread_barrier_destroy(&hid_mgr_barrier);
+
 		IOHIDManagerClose(hid_mgr, kIOHIDOptionsTypeNone);
 		CFRelease(hid_mgr);
 		hid_mgr = NULL;

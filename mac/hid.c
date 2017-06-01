@@ -449,8 +449,6 @@ int HID_API_EXPORT hid_exit (void)
 
 static void process_pending_events ()
 {
-    return; //interfering with Qt Applications by executing event loop processing second time, works fine without it
-
 SInt32 res;
 
     do

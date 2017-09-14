@@ -435,10 +435,11 @@ int HID_API_EXPORT hid_exit(void)
 }
 
 static void process_pending_events(void) {
+  return; //loop is processed in separate thread, see manager_thread
 	SInt32 res;
 	do {
 		res = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.001, FALSE);
-	} while(res != kCFRunLoopRunFinished && res != kCFRunLoopRunTimedOut);
+  } while(res != kCFRunLoopRunFinished && res != kCFRunLoopRunTimedOut);
 }
 
 struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, unsigned short product_id)

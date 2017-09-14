@@ -992,7 +992,7 @@ int HID_API_EXPORT hid_send_feature_report(hid_device *dev, const unsigned char 
 
 int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, size_t length)
 {
-	CFIndex len = length;
+	CFIndex len = length-1;
 	IOReturn res;
 
 	/* Return if the device has been unplugged. */

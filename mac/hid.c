@@ -384,10 +384,11 @@ int HID_API_EXPORT hid_exit(void)
 }
 
 static void process_pending_events(void) {
+  return; //loop is processed in separate thread, see manager_thread
 	SInt32 res;
 	do {
 		res = CFRunLoopRunInMode(kCFRunLoopDefaultMode, 0.001, FALSE);
-	} while(res != kCFRunLoopRunFinished && res != kCFRunLoopRunTimedOut);
+  } while(res != kCFRunLoopRunFinished && res != kCFRunLoopRunTimedOut);
 }
 
 struct hid_device_info  HID_API_EXPORT *hid_enumerate(unsigned short vendor_id, unsigned short product_id)
@@ -704,7 +705,7 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 	}
 
 	/* Open the IOHIDDevice */
-	IOReturn ret = IOHIDDeviceOpen(dev->device_handle, kIOHIDOptionsTypeSeizeDevice);
+	IOReturn ret = IOHIDDeviceOpen(dev->device_handle, 0 /*kIOHIDOptionsTypeSeizeDevice*/);
 	if (ret == kIOReturnSuccess) {
 		char str[32];
 
@@ -941,7 +942,7 @@ int HID_API_EXPORT hid_send_feature_report(hid_device *dev, const unsigned char 
 
 int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, size_t length)
 {
-	CFIndex len = length;
+	CFIndex len = length-1;
 	IOReturn res;
 
 	/* Return if the device has been unplugged. */
@@ -951,7 +952,7 @@ int HID_API_EXPORT hid_get_feature_report(hid_device *dev, unsigned char *data, 
 	res = IOHIDDeviceGetReport(dev->device_handle,
 	                           kIOHIDReportTypeFeature,
 	                           data[0], /* Report ID */
-	                           data, &len);
+	                           data+1, &len);
 	if (res == kIOReturnSuccess)
 		return len;
 	else
@@ -991,7 +992,7 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 	   been unplugged. If it's been unplugged, then calling
 	   IOHIDDeviceClose() will crash. */
 	if (!dev->disconnected) {
-		IOHIDDeviceClose(dev->device_handle, kIOHIDOptionsTypeSeizeDevice);
+		IOHIDDeviceClose(dev->device_handle, 0 /*kIOHIDOptionsTypeSeizeDevice*/);
 	}
 
 	/* Clear out the queue of received reports. */

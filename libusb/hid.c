@@ -40,7 +40,9 @@
 #include <sys/ioctl.h>
 #include <sys/utsname.h>
 #include <fcntl.h>
+#ifndef NK_REMOVE_PTHREAD
 #include <pthread.h>
+#endif //NK_REMOVE_PTHREAD
 #include <wchar.h>
 
 /* GNU / LibUSB */
@@ -162,14 +164,17 @@ struct hid_device_ {
 	/* Whether blocking reads are used */
 	int blocking; /* boolean */
 
-	/* Read thread objects */
+#ifndef NK_REMOVE_PTHREAD
+/* Read thread objects */
 	pthread_t thread;
 	pthread_mutex_t mutex; /* Protects input_reports */
 	pthread_cond_t condition;
 	pthread_barrier_t barrier; /* Ensures correct startup sequence */
+
 	int shutdown_thread;
 	int cancelled;
 	struct libusb_transfer *transfer;
+#endif //NK_REMOVE_PTHREAD
 
 	/* List of received input reports. */
 	struct input_report *input_reports;
@@ -185,19 +190,23 @@ static hid_device *new_hid_device(void)
 	hid_device *dev = calloc(1, sizeof(hid_device));
 	dev->blocking = 1;
 
+#ifndef NK_REMOVE_PTHREAD
 	pthread_mutex_init(&dev->mutex, NULL);
 	pthread_cond_init(&dev->condition, NULL);
 	pthread_barrier_init(&dev->barrier, NULL, 2);
+#endif //NK_REMOVE_PTHREAD
 
 	return dev;
 }
 
 static void free_hid_device(hid_device *dev)
 {
+#ifndef NK_REMOVE_PTHREAD
 	/* Clean up the thread objects */
 	pthread_barrier_destroy(&dev->barrier);
 	pthread_cond_destroy(&dev->condition);
 	pthread_mutex_destroy(&dev->mutex);
+#endif //NK_REMOVE_PTHREAD
 
 	/* Free the device itself */
 	free(dev);
@@ -729,6 +738,7 @@ hid_device * hid_open(unsigned short vendor_id, unsigned short product_id, const
 	return handle;
 }
 
+#ifndef NK_REMOVE_PTHREAD
 static void read_callback(struct libusb_transfer *transfer)
 {
 	hid_device *dev = transfer->user_data;
@@ -794,8 +804,10 @@ static void read_callback(struct libusb_transfer *transfer)
 		dev->cancelled = 1;
 	}
 }
+#endif //NK_REMOVE_PTHREAD
 
 
+#ifndef NK_REMOVE_PTHREAD
 static void *read_thread(void *param)
 {
 	hid_device *dev = param;
@@ -865,6 +877,7 @@ static void *read_thread(void *param)
 
 	return NULL;
 }
+#endif //NK_REMOVE_PTHREAD
 
 
 hid_device * HID_API_EXPORT hid_open_path(const char *path)
@@ -972,10 +985,12 @@ hid_device * HID_API_EXPORT hid_open_path(const char *path)
 							}
 						}
 
+#ifndef NK_REMOVE_PTHREAD
 						pthread_create(&dev->thread, NULL, read_thread, dev);
 
 						/* Wait here for the read thread to be initialized. */
 						pthread_barrier_wait(&dev->barrier);
+#endif //NK_REMOVE_PTHREAD
 
 					}
 					free(dev_path);
@@ -1066,13 +1081,15 @@ static int return_data(hid_device *dev, unsigned char *data, size_t length)
 	return len;
 }
 
+#ifndef NK_REMOVE_PTHREAD
 static void cleanup_mutex(void *param)
 {
 	hid_device *dev = param;
 	pthread_mutex_unlock(&dev->mutex);
 }
+#endif //NK_REMOVE_PTHREAD
 
-
+#ifndef NK_REMOVE_PTHREAD
 int HID_API_EXPORT hid_read_timeout(hid_device *dev, unsigned char *data, size_t length, int milliseconds)
 {
 	int bytes_read = -1;
@@ -1157,11 +1174,14 @@ ret:
 
 	return bytes_read;
 }
+#endif //NK_REMOVE_PTHREAD
 
+#ifndef NK_REMOVE_PTHREAD
 int HID_API_EXPORT hid_read(hid_device *dev, unsigned char *data, size_t length)
 {
 	return hid_read_timeout(dev, data, length, dev->blocking ? -1 : 0);
 }
+#endif //NK_REMOVE_PTHREAD
 
 int HID_API_EXPORT hid_set_nonblocking(hid_device *dev, int nonblock)
 {
@@ -1237,6 +1257,7 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 	if (!dev)
 		return;
 
+#ifndef NK_REMOVE_PTHREAD
 	/* Cause read_thread() to stop. */
 	dev->shutdown_thread = 1;
 	libusb_cancel_transfer(dev->transfer);
@@ -1247,6 +1268,7 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 	/* Clean up the Transfer objects allocated in read_thread(). */
 	free(dev->transfer->buffer);
 	libusb_free_transfer(dev->transfer);
+#endif //NK_REMOVE_PTHREAD
 
 	/* release the interface */
 	libusb_release_interface(dev->device_handle, dev->interface);
@@ -1254,12 +1276,16 @@ void HID_API_EXPORT hid_close(hid_device *dev)
 	/* Close the handle */
 	libusb_close(dev->device_handle);
 
+#ifndef NK_REMOVE_PTHREAD
 	/* Clear out the queue of received reports. */
 	pthread_mutex_lock(&dev->mutex);
+#endif //NK_REMOVE_PTHREAD
 	while (dev->input_reports) {
 		return_data(dev, NULL, 0);
 	}
+#ifndef NK_REMOVE_PTHREAD
 	pthread_mutex_unlock(&dev->mutex);
+#endif //NK_REMOVE_PTHREAD
 
 	free_hid_device(dev);
 }

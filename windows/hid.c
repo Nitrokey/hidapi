@@ -371,13 +371,9 @@ struct hid_device_info HID_API_EXPORT * HID_API_CALL hid_enumerate(unsigned shor
 		/* Open a device handle, but check if path ends with "\kbd" first and remove if present (needed for Windows 1809)*/
 		char* path_extension = device_interface_detail_data->DevicePath + strlen(device_interface_detail_data->DevicePath) - strlen("\\kbd");
 		if(strcmp(path_extension, "\\kbd") == 0) {
-			char hidpath[MAX_PATH];
-			memset(hidpath, 0, MAX_PATH);
-			strncpy(hidpath, device_interface_detail_data->DevicePath, strlen(device_interface_detail_data->DevicePath) - strlen("\\kbd"));
-			write_handle = open_device(hidpath, TRUE);
-		} else {
-			write_handle = open_device(device_interface_detail_data->DevicePath, TRUE);
+			memset(path_extension, 0, strlen("\\kbd"));
 		}
+		write_handle = open_device(device_interface_detail_data->DevicePath, TRUE);
 
 		/* Check validity of write_handle. */
 		if (write_handle == INVALID_HANDLE_VALUE) {

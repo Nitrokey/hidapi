@@ -1,3 +1,9 @@
+Note: this fork is based on the original HIDAPI with some patches added to support internal applications. It is not maintained regularly.
+Currently maintained HIDAPI fork is available at:
+- https://github.com/libusb/hidapi
+
+
+
          HIDAPI library for Windows, Linux, FreeBSD and Mac OS X
         =========================================================
 

@@ -449,6 +449,7 @@ static struct hid_device_info *create_device_info_with_usage(IOHIDDeviceRef dev,
 			res = IORegistryEntryGetRegistryEntryID(iokit_dev, &entry_id);
 			if (res == KERN_SUCCESS) {
 				if ((cur_dev->path = calloc(32 + 3 + 1, 1)) != NULL) {
+					printf("*** HIDAPI id:%llu\n", entry_id);
 					sprintf(cur_dev->path, "id:%llu", entry_id);
 				}
 			} else {
